@@ -1,0 +1,1052 @@
+echo "# Dissertation-code" >> README.md
+git init
+git add README.md
+git commit -m "first commit"
+git branch -M main
+git remote add origin https://github.com/7056A-DISS-2022/Dissertation-code.git
+git push -u origin main
+
+// Water mask
+// Add .updateMask(waterMask) after the variable name to remove the ocean and lakes
+var waterOcc = ee.Image("JRC/GSW1_0/GlobalSurfaceWater").select('occurrence'),
+    jrc_data0 = ee.Image("JRC/GSW1_0/Metadata").select('total_obs').lte(0),
+    waterOccFilled = waterOcc.unmask(0).max(jrc_data0),
+    waterMask = waterOccFilled.lt(50);
+    
+
+    
+////////DEFINE THE LOCATION of the Cévennes National Park, SE France 
+var Cevennes = ee.Geometry.Point(3.8285, 44.2852);
+Map.centerObject (Caoi,10);
+
+var Caoi1 = ee.Geometry.Polygon(
+        [[[4.251301584587135,43.91296211561118],
+          [4.251301584587135,44.55253915768655],
+          [3.199360666618385,44.55253915768655],
+          [3.199360666618385,43.91296211561118]]]);
+
+/////coeur zone shapefile /////////
+var coeur = ee.FeatureCollection('projects/earthengine-legacy/assets/users/oliviabyrne44/coeur_parc_national_cevennes1');
+coeur = coeur.geometry();
+Map.centerObject(coeur);
+Map.addLayer(coeur, {colour: 'blue'}, 'coeur zone');
+///////////////////////
+
+
+/////adhesion zone shapefile /////////
+var adhesion = ee.FeatureCollection('projects/earthengine-legacy/assets/users/oliviabyrne44/adhesion');
+adhesion = adhesion.geometry();
+Map.centerObject(adhesion);
+Map.addLayer(adhesion, {colour: 'blue'}, 'adhesion zone');
+///////////////////////
+
+//Pre-drought period
+
+
+/////////////////////////////////////////////////
+var preStart16 =ee.Date('2016-03-01');
+var preEnd16 =ee.Date('2016-05-31');
+
+    var postStart16 =ee.Date('2016-06-01');
+    var postEnd16 =ee.Date('2016-08-31');
+/////////////////////////////////////////////////
+var preStart17 =ee.Date('2017-03-30');
+var preEnd17 =ee.Date('2017-05-31');
+
+    var postStart17 =ee.Date('2017-06-30');
+    var postEnd17 =ee.Date('2017-08-31');
+/////////////////////////////////////////////////
+var preStart18 =ee.Date('2018-03-01');
+var preEnd18 =ee.Date('2018-05-31');
+
+  var postStart18 =ee.Date('2018-06-01');
+  var postEnd18 =ee.Date('2018-08-31');
+/////////////////////////////////////////////////
+//pre 2019 DROUGHT
+var preStart19 =ee.Date('2019-03-01');
+var preEnd19 =ee.Date('2019-05-31');
+
+//Post or During Drought period
+var postStart =ee.Date('2019-06-01');
+var postEnd =ee.Date('2019-08-31');
+
+// Recovery Period
+var recStart =ee.Date('2019-09-01');
+var recEnd =ee.Date('2019-12-31');
+////////////////////////////////////////////////
+//ONE year on Period (spring)
+var springStart =ee.Date('2020-03-15');
+var springEnd =ee.Date('2020-05-15');
+
+var postStart20= ee.Date('2020-06-01');
+  var postEnd20 =ee.Date('2020-08-31');
+///////////////////////////////////////////////  
+//cloud mask// -      Landsat 8 Collection 2, Level 2
+// QA_PIXEL band (CFMask) to mask unwanted pixels.
+function maskL8sr(image) {
+  // Bit 0 - Fill
+  // Bit 1 - Dilated Cloud
+  // Bit 2 - Cirrus
+  // Bit 3 - Cloud
+  // Bit 4 - Cloud Shadow
+  var qaMask = image.select('QA_PIXEL').bitwiseAnd(parseInt('11111', 2)).eq(0);
+  var saturationMask = image.select('QA_RADSAT').eq(0);
+
+  // Apply the scaling factors to the appropriate bands.
+  var opticalBands = image.select('SR_B.').multiply(0.0000275).add(-0.2);
+  var thermalBands = image.select('ST_B.*').multiply(0.00341802).add(149.0);
+
+  // Replace the original bands with the scaled ones and apply the masks.
+  return image.addBands(opticalBands, null, true)
+      .addBands(thermalBands, null, true)
+      .updateMask(qaMask)
+      .updateMask(saturationMask);
+}
+/* Map the function over one year of data.
+var collection = ee.ImageCollection('LANDSAT/LC08/C02/T1_L2')
+                     .filterDate('2017-03-05', '2017-05-31')
+                     .map(maskL8sr);
+
+var composite = collection.median().clip(Caoi);
+// Display the results.
+Map.setCenter(3.44, 44.49, 8);  // Site
+Map.addLayer(composite, {bands: ['SR_B4', 'SR_B3', 'SR_B2'], min: 0, max: 0.3}, 'L8SR_AprMay2017');*/
+
+
+
+
+
+
+// Get cloud-free Landsat 8 images of the site, sort and select least cloudy image, for the pre drought period
+//2017 - two years before
+var predlandsat = ee.ImageCollection('LANDSAT/LC08/C02/T1_L2')
+                     .filterDate(preStart19,preEnd19)
+                     .map(maskL8sr);
+
+var predroughtlandsat = predlandsat.median().clip(Caoi);
+
+//2018 pre - one year before
+var prelandsat18 = ee.ImageCollection('LANDSAT/LC08/C02/T1_L2')
+                     .filterDate(preStart18,preEnd18)
+                     .map(maskL8sr);
+
+var predroughtlandsat18 = predlandsat.median().clip(Caoi);
+                    
+//and for post/during fire period                    
+var posdlandsat = ee.ImageCollection('LANDSAT/LC08/C02/T1_L2')
+                     .filterDate(postStart,postEnd)
+                     .map(maskL8sr);
+
+var postdroughtlandsat = posdlandsat.median().clip(Caoi);
+                    
+//and for recovery period
+var wint_reclandsat = ee.ImageCollection('LANDSAT/LC08/C02/T1_L2')
+                     .filterDate(recStart,recEnd)
+                     .map(maskL8sr);
+
+var winter_rec = wint_reclandsat .median().clip(Caoi);
+              
+
+//one year on            
+var year_reclandsat = ee.ImageCollection('LANDSAT/LC08/C02/T1_L2')
+                     .filterDate(springStart,springEnd)
+                     .map(maskL8sr);
+
+var year_rec = year_reclandsat.median().clip(Caoi);
+var truevis = {
+    bands: ['SR_B4', 'SR_B3', 'SR_B2'], 
+    min: 0, 
+    max: 0.3
+}
+
+// Display the results.
+Map.setCenter(3.44, 44.49, 9);  // Site
+Map.addLayer(predroughtlandsat, truevis, 'Pre Drought L8 True Colour');
+Map.addLayer(predroughtlandsat18, truevis, 'Pre Drought 2018 L8 True Colour');
+Map.addLayer(postdroughtlandsat, truevis, 'Drought L8 True Colour');
+Map.addLayer(winter_rec, truevis, ' Winter Recovery L8 True Colour');
+Map.addLayer(year_rec, truevis, ' One yr Recovery L8 True Colour');
+
+Export.image.toDrive({image:postdroughtlandsat, region:Caoi, description:'Drought TC image', folder:'Cev_TC', scale:50});
+
+var imageinfo = ee.Algorithms.Describe(predroughtlandsat) 
+//print('imageinfo', imageinfo.get(dimensions))
+                    
+// Print for information
+print(predroughtlandsat, 'predrought');
+print(predroughtlandsat18, 'predrought 18')
+print(postdroughtlandsat, 'postdrought');
+print(winter_rec, 'winter recovery');
+print(year_rec, 'one year recovery');
+print(Caoi, 'area of interest details')
+
+
+//FCIR images
+Map.addLayer(predroughtlandsat, {bands: ['SR_B5','SR_B4','SR_B3'], min: 700, max: 2700 }, 'Pre Drought L8 FCIR');
+//Map.addLayer(postdroughtlandsat, {bands: ['SR_B5','SR_B4','SR_B3'], min: 100, max: 1500 }, 'Drought L8 FCIR');
+//Map.addLayer(winter_rec, {bands: ['SR_B5','SR_B4','SR_B3'], min: 100, max: 2400 }, 'WRec L8 FCIR');
+//Map.addLayer(year_rec,{bands: ['SR_B5','SR_B4','SR_B3'], min: 100, max: 2400 }, 'SpRec L8 FCIR');
+
+
+
+
+/////coeur zone shapefile /////////
+var coeur = ee.FeatureCollection('projects/earthengine-legacy/assets/users/oliviabyrne44/coeur_parc_national_cevennes1');
+coeur = coeur.geometry();
+Map.centerObject(coeur);
+Map.addLayer(coeur, {colour: 'blue'}, 'coeur zone');
+///////////////////////
+
+
+
+//Plot the Histogram for the visible bands 
+//var histogram = ui.Chart.image.histogram({
+//  image: year_rec.clip(Caoi).select('B5','B4','B3'),
+//  scale: 200,
+//  minBucketWidth: 100
+//});
+//histogram.setOptions({
+//  title: 'one year on FCIR - Histogram'
+//});
+
+//Show the histogram
+//print(histogram);
+
+  
+  
+  //create histograms for different images 
+  var histogram = ui.Chart.image.histogram({
+  image: year_rec.clip(Caoi).select('SR_B4','SR_B3','SR_B2'),
+  scale: 200,
+  minBucketWidth: 100
+});
+histogram.setOptions({
+  title: 'yrspring_landsat TC - Histogram'
+});
+
+//Show the histogram
+print(histogram);
+  
+
+//VISUALISATION PARAMETERS//
+
+// Setting  Visualisation parameters using the computed histogram values - pre drought
+var imagevis_pre = {
+
+  bands: ['SR_B4','SR_B3','SR_B2'], 
+  min: [100,200,100], 
+  max: [1900,1800,1200],
+  gamma:1.2,
+};
+
+// Visualisation parameters post drought
+var imagevis_post = {
+
+  bands: ['SR_B4','SR_B3','SR_B2'], 
+  min: [200,300,0], 
+  max: [2000,1800,1300],
+  gamma:1.2,
+};
+
+// Visualisation parameters winter recovery
+var imagevis_wrec = {
+
+  bands: ['SR_B4','SR_B3','SR_B2'], 
+  min: [0,0,0], 
+  max: [1800,1500,1100],
+  gamma:1.2,
+};
+
+
+//spring recovery'18
+var imagevis_yrrec = {
+
+  bands: ['SR_B4','SR_B3','SR_B2'], 
+  min: [100,100,0], 
+  max: [1700,1500,1000],
+  gamma:1.2,
+};
+
+// Display the TC images again, this time with the parameters defined in imagevis (histogram values)
+//Map.addLayer(predroughtlandsat, imagevis_pre, 'Pre Drought TCv');
+//Map.addLayer(postdroughtlandsat, imagevis_post, 'Post Drought TCv');
+//Map.addLayer(winter_rec, imagevis_wrec, 'Winter Recovery TCv');
+//Map.addLayer(year_rec, imagevis_yrrec, 'Spring Recovery TCv');
+
+// After running the code, compare the  images... the same image displayed with different visualisation settings 
+
+//You can also draw the AOI box as a layer on the map
+//Map.addLayer(Caoi, {color: 'royalblue'}, 'Area of Interest', false);
+
+
+////////////////////////// Calculate NDVI////////////////////////////
+
+var prendvi = predroughtlandsat.normalizedDifference(['SR_B5', 'SR_B4']).updateMask(waterMask);
+var postndvi = postdroughtlandsat.normalizedDifference(['SR_B5', 'SR_B4']).updateMask(waterMask);
+var w_recndvi = winter_rec.normalizedDifference(['SR_B5', 'SR_B4']).updateMask(waterMask);
+var yr_recndvi = year_rec.normalizedDifference(['SR_B5', 'SR_B4']).updateMask(waterMask);
+
+print(prendvi, 'preNDVI');
+print(prendvi, 'postNDVI');
+print(prendvi, 'w_recNDVI');
+print(prendvi, 'yr_recNDVI');
+
+//G extra
+  var meanTotalPreNDVI = prendvi.reduceRegion({
+  reducer: ee.Reducer.mean(),
+  geometry: Caoi,
+  scale: 30,
+  maxPixels: 1e10
+});
+
+var meanTotalPostNDVI = postndvi.reduceRegion({
+  reducer: ee.Reducer.mean(),
+  geometry: Caoi,
+  scale: 30,
+  maxPixels: 1e10
+});
+
+print(meanTotalPreNDVI, 'meanTotalPreNDVI');
+print(meanTotalPostNDVI, 'meanTotalPostNDVI');  //all working:)
+
+
+////
+var dNDVI = prendvi.select('NDVI').subtract(postndvi.select('NDVI')).rename('dNDVI');
+
+var meanTotaldNDVI = dNDVI.reduceRegion({
+  reducer: ee.Reducer.mean(),
+  geometry:adhesion,
+  scale: 30,
+  maxPixels: 1e10
+});
+
+print(meanTotaldNDVI, 'meanTotaldNDVI');
+
+var minMaxTotaldNDVI = dNDVI.reduceRegion({
+  reducer: ee.Reducer.minMax(),
+  geometry: Caoi,
+  scale: 30,
+  maxPixels: 1e10
+});
+
+print(minMaxTotaldNDVI, 'minMaxTotaldNDVI');
+
+
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+//Set a visualisation and NDVI colour palette for the NDVI images - !!!!((check colour palette - why is it not green? ))
+var ndvivis = {min: -0.1, max: 1, palette:
+['FFFFFF', 'CE7E45', 'DF923D', 'F1B555', 'FCD163', '99B718', '74A901', '66A000',
+  '529400','3E8601', '207401', '056201', '004C00', '023B01', '012E01', '011D01','011301']
+  };
+  
+//Display the NDVI images
+Map.addLayer(prendvi, ndvivis, 'Pre Drought NDVI');
+Map.addLayer(postndvi, ndvivis, 'Post Drought NDVI');
+Map.addLayer(w_recndvi, ndvivis, 'Winter Recovery NDVI');
+Map.addLayer(yr_recndvi, ndvivis, 'Year Recovery NDVI');
+
+Export.image.toDrive({image:prendvi, region:Caoi, description:'preNDVI19', folder:'Cev_NDVI', scale:50});
+Export.image.toDrive({image:postndvi, region:Caoi, description:'postNDVI19', folder:'Cev_NDVI', scale:50});
+Export.image.toDrive({image:w_recndvi, region:Caoi, description:'winter rec NDVI19', folder:'Cev_NDVI', scale:50});
+Export.image.toDrive({image:yr_recndvi, region:Caoi, description:'year rec NDVI20', folder:'Cev_NDVI', scale:50});
+
+Export.table.toDrive({
+  collection: ee.ImageCollection(prendvi),
+  description:'prendvi',
+  folder: "Cev_NDVI"
+  });
+  Export.table.toDrive({
+  collection: ee.ImageCollection(postndvi),
+  description:'postndvi',
+  folder: "Cev_NDVI"
+  });
+  Export.table.toDrive({
+  collection: ee.ImageCollection(w_recndvi),
+  description:'w_recndvi',
+  folder: "Cev_NDVI"
+  });
+   Export.table.toDrive({
+  collection: ee.ImageCollection(yr_recndvi),
+  description:'yr_recndvi',
+  folder: "Cev_NDVI"
+  });
+
+//--------------------------
+//   Comparing NDVI data  
+//--------------------------
+// 1. Comparing NDVI data by 'COMPOSITING' - ie displaying the miltitemporal data as a colour composite.
+
+// Combine the NDVI data to create a multitemporal NDVI composite using the addbands() function
+var combndvi = prendvi.rename('PRENDVI').addBands(postndvi.rename('POSTNDVI'));
+//Print and check the details of the composite
+print ('Multi-temp NDVI', combndvi);
+//Display the multi-temporal NDVI image
+Map.addLayer(combndvi, {bands: ['PRENDVI', 'POSTNDVI','POSTNDVI'], min:-0.9, max:0.9, gamma:0.5}, 'Pre-PostDrought NDVI Composite');
+
+
+
+//----------------------------
+// 2. Comparing NDVI data by DIFFERENCING - dNDVI -will use this!
+
+// Compute the difference in NDVI values, using the subtract() function.
+var ndvidiff = postndvi.subtract(prendvi).updateMask(waterMask);
+//Display the NDVI difference image
+Map.addLayer(ndvidiff, { min:-0.95, max: 0.95, palette: ['red','yellow','green']}, 'Pre and post-drought NDVI Difference');
+
+Export.image.toDrive({image:ndvidiff, region:Caoi, description:'NDVIdiff pre-post drought', folder:'Cev_NDVI', scale:50});
+
+Export.table.toDrive({
+  collection: ee.ImageCollection(ndvidiff),
+  description:'ndvidiff',
+  folder: "Cev_NDVI"
+  });
+  /*
+// Compute the difference in winter and post drought NDVI values, using the subtract() function.
+//var ndvidiff_w = w_recndvi.subtract(postndvi).updateMask(waterMask);
+//Display the NDVI difference image
+Map.addLayer(ndvidiff_w, { min:-0.95, max: 0.95, palette: ['red','yellow','green']}, 'NDVI winter and post Difference');
+Export.image.toDrive({image:ndvidiff_w, region:Caoi, description:'NDVIdiff winter-post', folder:'Cev_NDVI', scale:50});
+
+//difference in spring one year later and post drought NDVI values
+var ndvidiff_yr = yr_recndvi.subtract(postndvi).updateMask(waterMask);
+//Display the NDVI difference image
+Map.addLayer(ndvidiff_yr, { min:-0.95, max: 0.95, palette: ['red','yellow','green']}, 'NDVI spring and post Difference');
+//Recode NDVI classes???......>Also computing area summaries
+Export.image.toDrive({image:ndvidiff_yr, region:Caoi, description:'NDVIdiff spring-post', folder:'Cev_NDVI', scale:50});
+
+//Difference in spring one year later and pre drought NDVI values 
+var ndvidiff_yr_pre = yr_recndvi.subtract(prendvi).updateMask(waterMask);
+//Display the NDVI difference image
+Map.addLayer(ndvidiff_yr_pre, { min:-0.95, max: 0.95, palette: ['red','yellow','green']}, 'NDVI spring and pre Difference');
+Export.image.toDrive({image:ndvidiff_yr_pre, region:Caoi, description:'NDVIdiff spring-pre', folder:'Cev_NDVI', scale:50});
+*/
+
+
+// Reclassify (recode) the NDVI differences into fewer change classes
+// (this could also be done with the NDVI or any other image if it makes sense, eg to create NDVI classes) 
+//
+
+// This example recodes the NDVI differences into 6 classes (Less than -0.5, -0.5 to -0.2, -0.2 to 0, etc...)
+// First set the class thresholds
+var thresholds = ee.Image([-0.8, -0.4, 0, 0.4, 0.8,]);
+// Note - the threshold values are stored as an image, using ee.Image() function
+// Recode the dNDVI data using the lt() function 
+var ndvidiffcoded = ndvidiff.gt(thresholds).reduce('sum').toInt().updateMask(waterMask);
+//Display the results on the map
+Map.addLayer(ndvidiffcoded, {min: 0, max: 5, palette: ['red','orange','yellow','palegreen','green','darkgreen']}, 'Recoded pre-postNDVIdiff 2019');
+Export.image.toDrive({image:ndvidiffcoded, region:Caoi1, crs: 'EPSG:2154', description:'NDVIdiff coded pre-post', folder:'Cev_NDVI', scale:50});
+//Export.image.toDrive({image:ndvidiffcoded, region:Iaoi, description:'dNDVI_recoded2', folder:'ItalyDrought_1', scale:50});
+
+var statsum = ndvidiffcoded.addBands(ee.Image.pixelArea()).reduceRegion({
+  reducer: ee.Reducer.sum().unweighted().group(),
+  geometry: Caoi1,
+  crs: 'EPSG:2154',
+  scale: 30,
+});
+// Print and check the summary, if you are curious
+print('Area Summary of dNDVI classes',  statsum); //need to specify a scale
+
+// Convert the summary to a list object (in tabular form), so it is easier to read when exported
+var statsumlist = ee.List(statsum.get('groups')).map(function (pair) {
+  return ee.Feature(null, pair);
+});
+// Export recoded NDVI Difference Image
+//Export.image.toDrive({image:ndvidiffcoded, region:Caoi, folder:'CalifDroughts', scale:30, description:'Recoded_dNDVI'});
+    // Export the summary table  to a CSV table
+Export.table.toDrive(ee.FeatureCollection(statsumlist), 'dNDVI_Summary1Caoi8');
+
+
+
+
+
+
+
+#SPEI
+
+//Cévennes
+var aoi = ee.Geometry.Polygon(        
+        [[[4.342116410862977,43.71927768482563],
+          [4.342116410862977,44.58437505792303],
+          [3.1473532272692273,44.58437505792303],
+          [3.1473532272692273,43.71927768482563]]]);
+          
+
+// Extract Precip and PET data from TerraClimate
+var dataset = ee.ImageCollection('IDAHO_EPSCOR/TERRACLIMATE')
+              .filter(ee.Filter.date('2010-01-01', '2020-12-31')); //could alter dates!currently 10 yr period
+var precip=dataset.select('pr');
+var pet=dataset.select('pet');
+
+//print(precip,pet);
+
+// Rename Bands and reformat collection to bands
+var rename_band = function(img){
+    return img.select([0], [img.id()])};
+
+var image1 = precip.map(rename_band).toBands().clip(aoi);
+var image2 = pet.map(rename_band).toBands().clip(aoi);
+
+var bal= image1.subtract(image2);
+//print(image1,image2,bal);
+print('Water Balance',bal);
+
+// Get Image dimensions
+var imginfo = ee.Algorithms.Describe(bal);
+var rows = ee.List( ee.Dictionary( ee.List(ee.Dictionary(imginfo).get("bands") ).get(0) ).get("dimensions") ).get(0);
+var columns = ee.List( ee.Dictionary( ee.List(ee.Dictionary(imginfo).get("bands") ).get(0) ).get("dimensions") ).get(1);
+  
+print("Image Width", columns);
+print("Image Height", rows);
+print('Info',imginfo);
+
+
+// Compute to the mean values for the study area
+var mean = ee.Image(bal)
+             .reduceRegions({collection: aoi, reducer: 
+                  ee.Reducer.mean()});
+var mean1 = mean.select(['.*'],null,false);
+
+print(mean);
+print(mean1);
+
+// Export mean values to drive
+    Export.table.toDrive({
+              collection: mean1, 
+              description: "Mean_Water_Balance_Caoi", 
+              fileNamePrefix: "Water_Bal",
+              fileFormat: 'CSV'
+    });
+
+Map.centerObject(aoi);
+Map.addLayer(bal,{min:0, max:500},'Water Bal');
+
+
+/*///~~~~~~`
+//trying to calc area in km2 unsucessfully
+var areaChart = ui.Chart.image.byClass({
+  image: ee.Image.pixelArea().addBands(aoi),
+  classBand: 'classification', 
+  region:  [[[4.342116410862977,43.71927768482563],
+          [4.342116410862977,44.58437505792303],
+          [3.1473532272692273,44.58437505792303],
+          [3.1473532272692273,43.71927768482563]]),
+  scale: 30,
+  reducer: ee.Reducer.sum()
+});
+*/
+
+// To export the data for each pixel
+
+// Convert the pixels to features for export
+var pixelstable = bal.sample({
+  region: aoi,
+  geometries: true,  // This specifies that you want the lat-long.
+});
+
+//Add lat and log coordinates as columns to the table
+var pixelstablelatlong = pixelstable.map(function (feature) {
+  var coordinates = feature.geometry().transform('epsg:4326').coordinates();
+  return feature.set('lon', coordinates.get(0), 'lat', coordinates.get(1));
+});
+
+// print('Pixels',pixelstable);
+// print('Pixels',pixelstablelatlong);
+
+//Export pixel values table to drive.
+Export.table.toDrive({
+              collection: pixelstablelatlong,//replace with pixelstable, if lat long columns are not required 
+              description: "Water_Balance_perpixel", 
+              fileNamePrefix: "Water_Bal_perpixel",
+              fileFormat: 'CSV'
+    });
+    
+    
+    
+    
+    
+    
+////
+//just 2019
+var Caoi1 = ee.Geometry.Polygon(
+        [[[4.251301584587135,43.91296211561118],
+          [4.251301584587135,44.55253915768655],
+          [3.199360666618385,44.55253915768655],
+          [3.199360666618385,43.91296211561118]]]);
+// Extract Precip and PET data from TerraClimate
+var dataset1 = ee.ImageCollection('IDAHO_EPSCOR/TERRACLIMATE')
+              .filter(ee.Filter.date('2019-06-01', '2019-08-31')); 
+var precip=dataset1.select('pr');
+var pet=dataset1.select('pet');
+
+//print(precip,pet);
+
+// Rename Bands and reformat collection to bands
+var rename_band = function(img){
+    return img.select([0], [img.id()])};
+
+var image1a = precip.map(rename_band).toBands().clip(Caoi1);
+var image2a = pet.map(rename_band).toBands().clip(Caoi1);
+
+var bal_= image1a.subtract(image2a);
+//print(image1,image2,bal);
+print('Water Balance1',bal_);
+
+// Get Image dimensions
+var imginfo = ee.Algorithms.Describe(bal_);
+var rows = ee.List( ee.Dictionary( ee.List(ee.Dictionary(imginfo).get("bands") ).get(0) ).get("dimensions") ).get(0);
+var columns = ee.List( ee.Dictionary( ee.List(ee.Dictionary(imginfo).get("bands") ).get(0) ).get("dimensions") ).get(1);
+  
+print("Image Width1", columns);
+print("Image Height1", rows);
+print('Info1',imginfo);
+
+
+// Compute to the mean values for the study area
+var mean_ = ee.Image(bal_)
+             .reduceRegions({collection: Caoi1, reducer: 
+                  ee.Reducer.mean()});
+var mean1_ = mean.select(['.*'],null,false);
+
+print(mean_);
+print(mean1_);
+
+// Export mean values to drive
+    Export.table.toDrive({
+              collection: mean1, 
+              description: "Mean_Water_Balance_Caoi", 
+              fileNamePrefix: "Water_Bal1",
+              fileFormat: 'CSV'
+    });
+
+Map.centerObject(Caoi1);
+Map.addLayer(bal,{min:0, max:500},'Water Bal1');
+Export.image.toDrive({image:bal, region:Caoi1, crs: 'EPSG:2154', description:'waterBal1aa', folder:'intromaps', scale:70});
+Export.image.toDrive({image:bal, region:Caoi1, crs: 'EPSG:2154', description:'waterBal1ab1', folder:'intromaps', scale:100});
+/*///~~~~~~`
+//trying to calc area in km2 unsucessfully
+var areaChart = ui.Chart.image.byClass({
+  image: ee.Image.pixelArea().addBands(aoi),
+  classBand: 'classification', 
+  region:  [[[4.342116410862977,43.71927768482563],
+          [4.342116410862977,44.58437505792303],
+          [3.1473532272692273,44.58437505792303],
+          [3.1473532272692273,43.71927768482563]]),
+  scale: 30,
+  reducer: ee.Reducer.sum()
+});
+*/
+
+// To export the data for each pixel
+
+// Convert the pixels to features for export
+var pixelstable = bal.sample({
+  region: Caoi1,
+  geometries: true,  // This specifies that you want the lat-long.
+});
+
+//Add lat and log coordinates as columns to the table
+var pixelstablelatlong = pixelstable.map(function (feature) {
+  var coordinates = feature.geometry().transform('epsg:2154').coordinates();
+  return feature.set('lon', coordinates.get(0), 'lat', coordinates.get(1));
+});
+
+// print('Pixels',pixelstable);
+// print('Pixels',pixelstablelatlong);
+
+//Export pixel values table to drive.
+Export.table.toDrive({
+              collection: pixelstablelatlong,//replace with pixelstable, if lat long columns are not required 
+              description: "Water_Balance_perpixel", 
+              fileNamePrefix: "Water_Bal_perpixel",
+              fileFormat: 'CSV'
+    });
+    
+    
+    
+    
+    
+    
+#Zonal dNDVI
+// Landsat 8
+var L8dataset = ee.ImageCollection("LANDSAT/LC08/C01/T1_SR") 
+.filterBounds(Caoi)
+.map(function(image){
+  return image.rename(['B0', 'B1', 'B2', 'B3', 'B4', 'B5', 'B7', 'B6', 'sr_atmos_opacity', 'sr_aerosol', 'pixel_qa', 'radsat_qa']);})
+  .select(['B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7','pixel_qa']);
+
+// Clipping Images
+var clipImage = function(image){
+  return image.clip(Caoi)};
+
+// MODIS Land Cover
+var landcover = ee.Image("MODIS/006/MCD12Q1/2018_01_01"); // Change to 2019, 2019, 2019, 2019, 2019
+var landcover = landcover.select('LC_Type1').clip(Caoi); 
+
+//L8 CLOUD MASK FUNCTION
+function maskL8sr(image) {
+  // Bits 3 and 5 are cloud shadow and cloud, respectively.
+  var cloudShadowBitMask = (1 << 3);
+  var cloudsBitMask = (1 << 5);
+  // Get the pixel QA band.
+  var qa = image.select('pixel_qa');
+  // Both flags should be set to zero, indicating clear conditions.
+  var mask = qa.bitwiseAnd(cloudShadowBitMask).eq(0)
+                 .and(qa.bitwiseAnd(cloudsBitMask).eq(0));
+  return image.updateMask(mask);
+}
+
+// Apply Blue Reflectance Cloud filter, adjust the threshold from 500 to appropriate value.
+var bluemask = function(image){
+  var lowblue = image.select('B1').lte(500);
+  return image.updateMask(lowblue);
+};
+
+// WATER MASK FUNCTION
+var waterMask = function(image){
+  var waterOcc = ee.Image("JRC/GSW1_0/GlobalSurfaceWater").select('occurrence'),
+     jrc_data0 = ee.Image("JRC/GSW1_0/Metadata").select('total_obs').lte(0),
+     waterOccFilled = waterOcc.unmask(0).max(jrc_data0),
+     waterMask = waterOccFilled.lt(50);
+ return image.updateMask(waterMask);
+};
+
+// Apply the functions
+var L8dataset = L8dataset.map(clipImage).map(maskL8sr).map(waterMask).map(bluemask);
+
+/*
+* ------------ PRE AND POST FIRE DATES
+*/
+
+var dateSp = ee.DateRange('2019-03-01', '2019-03-31'); // change this date for earlier image range
+var dateW = ee.DateRange('2019-09-01', '2019-12-31');
+var dateSp20 = ee.DateRange('2020-06-01', '2020-08-31'); 
+
+  var date15 = ee.DateRange('2015-06-01', '2015-08-31'); //summer of 2015
+  var date16 = ee.DateRange('2016-06-01', '2016-08-31'); //summer of 2016
+  var date17 = ee.DateRange('2017-06-01', '2017-08-31'); //summer of 2017
+  var date18 = ee.DateRange('2018-06-01', '2018-08-31'); //summer of 2018
+  var date20 = ee.DateRange('2020-06-01', '2020-08-31'); //summer of 2018
+
+
+
+var datasetSp = dataset.filterDate(dateSp).reduce(ee.Reducer.median());
+var datasetW = dataset.filterDate(dateW).reduce(ee.Reducer.median());
+var datasetSp20 = dataset.filterDate(dateSp20).reduce(ee.Reducer.median()); 
+
+  var dataset15 = dataset.filterDate(date15).reduce(ee.Reducer.median()); 
+  var dataset16 = dataset.filterDate(date16).reduce(ee.Reducer.median()); 
+  var dataset17 = dataset.filterDate(date17).reduce(ee.Reducer.median()); 
+  var dataset18 = dataset.filterDate(date18).reduce(ee.Reducer.median()); 
+  var dataset20 = dataset.filterDate(date20).reduce(ee.Reducer.median()); 
+/**
+* ------------ PERFORM NDVI AND DNDVI
+**/
+
+var NDVIdatasetSp = datasetSp.normalizedDifference(['B4_median', 'B3_median']).rename('NDVI');
+var NDVIdatasetW = datasetW.normalizedDifference(['B4_median', 'B3_median']).rename('NDVI');
+var NDVIdatasetSp20 = datasetSp20.normalizedDifference(['B4_median', 'B3_median']).rename('NDVI');
+  
+  var NDVIdataset15 = dataset15.normalizedDifference(['B4_median', 'B3_median']).rename('NDVI');
+  var NDVIdataset16 = dataset16.normalizedDifference(['B4_median', 'B3_median']).rename('NDVI');
+  var NDVIdataset17 = dataset17.normalizedDifference(['B4_median', 'B3_median']).rename('NDVI');
+  var NDVIdataset18 = dataset18.normalizedDifference(['B4_median', 'B3_median']).rename('NDVI');
+  var NDVIdataset20 = dataset20.normalizedDifference(['B4_median', 'B3_median']).rename('NDVI');
+
+
+var dNDVI = NDVIdataset1.select('NDVI').subtract(NDVIdataset2.select('NDVI')).rename('dNDVI');
+
+var zones = ee.Image(0)
+  .where(landcover.eq(1), 1)
+  .where(landcover.eq(2), 2)
+  .where(landcover.eq(4), 4)
+  .where(landcover.eq(5), 5)
+  .where(landcover.eq(6), 6)
+  .where(landcover.eq(7), 7)
+  .where(landcover.eq(8), 8)
+  .where(landcover.eq(9), 9)
+  .where(landcover.eq(10), 10)
+  .where(landcover.eq(11), 11)
+  .where(landcover.eq(12), 12);
+
+print(zones);
+
+var statsPre = NDVIdataset1.addBands(zones).reduceRegion({
+  reducer: ee.Reducer.median().group(1),
+  geometry: elbeni,
+  scale: 30,
+  maxPixels: 1e10
+});
+var statsPrelist = ee.List(statsPre.get('groups')).map(function (pair) {
+return ee.Feature(null, pair);});
+Export.table.toDrive({collection: ee.FeatureCollection(statsPrelist),  description:'statsPrelist_2019_other',  folder: "Dissertation"});
+
+
+var statsActive = NDVIdatasetA.addBands(zones).reduceRegion({
+  reducer: ee.Reducer.median().group(1),
+  geometry: elbeni,
+  scale: 30,
+  maxPixels: 1e10
+});
+var statsActivelist = ee.List(statsActive.get('groups')).map(function (pair) {
+return ee.Feature(null, pair);});
+Export.table.toDrive({collection: ee.FeatureCollection(statsActivelist),  description:'statsActivelist_2019_other',  folder: "Dissertation"});
+
+var statsPost = NDVIdataset2.addBands(zones).reduceRegion({
+  reducer: ee.Reducer.median().group(1),
+  geometry: elbeni,
+  scale: 30,
+  maxPixels: 1e10
+});
+var statsPostlist = ee.List(statsPost.get('groups')).map(function (pair) {
+return ee.Feature(null, pair);});
+Export.table.toDrive({collection: ee.FeatureCollection(statsPostlist),  description:'statsPostlist_2019_other',  folder: "Dissertation"});
+
+ 
+ var Caoi1 = ee.Geometry.Polygon(
+        [[[4.251301584587135,43.91296211561118],
+          [4.251301584587135,44.55253915768655],
+          [3.199360666618385,44.55253915768655],
+          [3.199360666618385,43.91296211561118]]]);
+          
+
+// Landsat 8
+var L8dataset = ee.ImageCollection("LANDSAT/LC08/C01/T1_SR") 
+.filterBounds(Caoi)
+.map(function(image){
+  return image.rename(['B0', 'B1', 'B2', 'B3', 'B4', 'B5', 'B7', 'B6', 'sr_atmos_opacity', 'sr_aerosol', 'pixel_qa', 'radsat_qa']);})
+  .select(['B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7','pixel_qa']);
+
+// Clipping Images
+var clipImage = function(image){
+  return image.clip(Caoi)};
+
+// MODIS Land Cover
+var landcover = ee.Image("MODIS/006/MCD12Q1/2019_01_01"); // CHANGE 
+var landcover = landcover.select('LC_Type1').clip(Caoi); 
+
+
+//L8 CLOUD MASK FUNCTION
+function maskL8sr(image) {
+  // Bits 3 and 5 are cloud shadow and cloud, respectively.
+  var cloudShadowBitMask = (1 << 3);
+  var cloudsBitMask = (1 << 5);
+  // Get the pixel QA band.
+  var qa = image.select('pixel_qa');
+  // Both flags should be set to zero, indicating clear conditions.
+  var mask = qa.bitwiseAnd(cloudShadowBitMask).eq(0)
+                 .and(qa.bitwiseAnd(cloudsBitMask).eq(0));
+  return image.updateMask(mask);
+}
+
+// Apply Blue Reflectance Cloud filter, adjust the threshold from 500 to appropriate value.
+var bluemask = function(image){
+  var lowblue = image.select('B1').lte(500);
+  return image.updateMask(lowblue);
+};
+
+// WATER MASK FUNCTION
+var waterMask = function(image){
+  var waterOcc = ee.Image("JRC/GSW1_0/GlobalSurfaceWater").select('occurrence'),
+     jrc_data0 = ee.Image("JRC/GSW1_0/Metadata").select('total_obs').lte(0),
+     waterOccFilled = waterOcc.unmask(0).max(jrc_data0),
+     waterMask = waterOccFilled.lt(50);
+ return image.updateMask(waterMask);
+};
+
+// Apply the functions
+var L8dataset = L8dataset.map(clipImage).map(maskL8sr).map(waterMask).map(bluemask);
+
+
+/////coeur zone shapefile /////////
+var coeur = ee.FeatureCollection('projects/earthengine-legacy/assets/users/oliviabyrne44/coeur_parc_national_cevennes1');
+coeur = coeur.geometry();
+Map.centerObject(coeur);
+Map.addLayer(coeur, {colour: 'blue'}, 'coeur zone');
+///////////////////////
+/////adhesion zone shapefile /////////
+var adhesion = ee.FeatureCollection('projects/earthengine-legacy/assets/users/oliviabyrne44/adhesion');
+adhesion = adhesion.geometry();
+Map.centerObject(adhesion);
+Map.addLayer(adhesion, {colour: 'blue'}, 'adhesion zone');
+///////////////////////
+
+/*
+* ------------ PRE AND POST FIRE DATES
+*/
+var date1 = ee.DateRange('2020-03-15', '2020-05-15'); // change this date for earlier image range
+var date2 = ee.DateRange('2020-06-01', '2020-08-31'); // change this date for later image range
+
+var dataset1 = L8dataset.filterDate(date1).reduce(ee.Reducer.median());
+var dataset2 = L8dataset.filterDate(date2).reduce(ee.Reducer.median()); 
+
+  var NDVIdataset1 = dataset1.normalizedDifference(['B4_median', 'B3_median']).rename('NDVI');
+  var NDVIdataset2 = dataset2.normalizedDifference(['B4_median', 'B3_median']).rename('NDVI');
+
+var dNDVIc = NDVIdataset1.select('NDVI').subtract(NDVIdataset2.select('NDVI')).rename('dNDVI');
+// This example recodes the NDVI differences into 6 classes (Less than -0.5, -0.5 to -0.2, -0.2 to 0, etc...)
+// First set the class thresholds
+var thresholds = ee.Image([-0.5, -0.2, 0, 0.2, 0.5,]);
+// Note - the threshold values are stored as an image, using ee.Image() function
+// Recode the dNDVI data using the lt() function 
+var ndvidiffcoded = ndvidiff.gt(thresholds).reduce('sum').toInt().updateMask(waterMask);
+//Display the results on the map
+Map.addLayer(ndvidiffcoded, {min: 0, max: 5, palette: ['red','orange','yellow','palegreen','green','darkgreen']}, 'Recoded pre-postNDVIdiff 2019');
+Export.image.toDrive({image:ndvidiffcoded, region:Caoi1, crs: 'EPSG:2154', description:'NDVIdiff coded pre-post', folder:'Cev_NDVI', scale:50});
+//Export.image.toDrive({image:ndvidiffcoded, region:Iaoi, description:'dNDVI_recoded2', folder:'ItalyDrought_1', scale:50});
+
+var statsum = ndvidiffcoded.addBands(ee.Image.pixelArea()).reduceRegion({
+  reducer: ee.Reducer.sum().unweighted().group(),
+  geometry: Caoi1,
+  crs: 'EPSG:2154',
+  scale: 30,
+});
+// Print and check the summary, if you are curious
+print('Area Summary of dNDVI classes',  statsum); //need to specify a scale
+
+// Convert the summary to a list object (in tabular form), so it is easier to read when exported
+var statsumlist = ee.List(statsum.get('groups')).map(function (pair) {
+  return ee.Feature(null, pair);
+});
+// Export recoded NDVI Difference Image
+//Export.image.toDrive({image:ndvidiffcoded, region:Caoi, folder:'CalifDroughts', scale:30, description:'Recoded_dNDVI'});
+    // Export the summary table  to a CSV table
+Export.table.toDrive(ee.FeatureCollection(statsumlist), 'dNDVI_Summary1');
+
+
+
+
+
+////
+
+var meanTotaldNDVI = dNDVIc.reduceRegion({
+  reducer: ee.Reducer.mean(),
+  geometry: adhesion,
+  scale: 30,
+  maxPixels: 1e10
+});
+
+print(meanTotaldNDVI, 'meanTotaldNDVI');
+
+var minMaxTotaldNDVI = dNDVIc.reduceRegion({
+  reducer: ee.Reducer.minMax(),
+  geometry: Caoi1,
+  scale: 30,
+  maxPixels: 1e10
+});
+
+print(minMaxTotaldNDVI, 'minMaxTotaldNDVI');
+////
+
+
+
+
+var zones = ee.Image(0)
+  .where(landcover.eq(1), 1)
+  .where(landcover.eq(2), 2)
+  .where(landcover.eq(4), 4)
+  .where(landcover.eq(5), 5)
+  .where(landcover.eq(6), 6)
+  .where(landcover.eq(7), 7)
+  .where(landcover.eq(8), 8)
+  .where(landcover.eq(9), 9)
+  .where(landcover.eq(10), 10)
+  .where(landcover.eq(11), 11)
+  .where(landcover.eq(12), 12)
+  .where(landcover.eq(14), 14);
+
+print(zones);
+
+var statsPre = NDVIdataset1.addBands(zones).reduceRegion({
+  reducer: ee.Reducer.median().group(1),
+  geometry: adhesion,
+  scale: 30,
+  maxPixels: 1e10
+});
+var statsPrelist = ee.List(statsPre.get('groups')).map(function (pair) {
+return ee.Feature(null, pair);});
+Export.table.toDrive({collection: ee.FeatureCollection(statsPrelist),  description:'statsdNDVIPrelist_20_adhesion',  folder: "dNDVI_adhesion"});
+
+
+
+var statsPostcoeur = NDVIdataset2.addBands(zones).reduceRegion({
+  reducer: ee.Reducer.median().group(1),
+  geometry: adhesion,
+  scale: 30,
+  maxPixels: 1e10
+});
+var statsPostlist = ee.List(statsPostcoeur.get('groups')).map(function (pair) {
+return ee.Feature(null, pair);});
+Export.table.toDrive({collection: ee.FeatureCollection(statsPostlist),  description:'statsPostlist_20_adhesion',  folder: "dNDVI_adhesion"});
+
+
+/*
+var StatsdNDVI = dNDVIc.addBands(zones).reduceRegion({
+  reducer: ee.Reducer.median().group(1),
+  geometry: Caoi1,
+  scale: 30,
+  maxPixels: 1e10
+});
+var statsdNDVIlist = ee.List(StatsdNDVI.get('groups')).map(function (pair) {
+return ee.Feature(null, pair);});
+Export.table.toDrive({collection: ee.FeatureCollection(statsPostlist),  description:'statsdNDVI_coeur19c_',  folder: "dNDVI_LC_19"});
+*/
+
+
+#Calculating Mean NDVI and dNDVI
+////////////////////////// Calculate NDVI////////////////////////////
+
+var prendvi = predroughtlandsat.normalizedDifference(['SR_B5', 'SR_B4']).updateMask(waterMask);
+var postndvi = postdroughtlandsat.normalizedDifference(['SR_B5', 'SR_B4']).updateMask(waterMask);
+
+
+print(prendvi, 'preNDVI');
+print(prendvi, 'postNDVI');
+print(prendvi, 'w_recNDVI');
+print(prendvi, 'yr_recNDVI');
+
+//G extra
+  var meanTotalPreNDVI = prendvi.reduceRegion({
+  reducer: ee.Reducer.mean(),
+  geometry: Caoi,
+  scale: 30,
+  maxPixels: 1e10
+});
+
+var meanTotalPostNDVI = postndvi.reduceRegion({
+  reducer: ee.Reducer.mean(),
+  geometry: Caoi,
+  scale: 30,
+  maxPixels: 1e10
+});
+
+print(meanTotalPreNDVI, 'meanTotalPreNDVI');
+print(meanTotalPostNDVI, 'meanTotalPostNDVI');  //all working:)
+
+
+////
+var dNDVI = prendvi.select('NDVI').subtract(postndvi.select('NDVI')).rename('dNDVI');
+
+var meanTotaldNDVI = dNDVI.reduceRegion({
+  reducer: ee.Reducer.mean(),
+  geometry: Caoi1,
+  scale: 30,
+  maxPixels: 1e10
+});
+
+print(meanTotaldNDVI, 'meanTotaldNDVI');
+
+var minMaxTotaldNDVI = dNDVI.reduceRegion({
+  reducer: ee.Reducer.minMax(),
+  geometry: Caoi1,
+  scale: 30,
+  maxPixels: 1e10
+});
+
+print(minMaxTotaldNDVI, 'minMaxTotaldNDVI');
+
+
+
+
+
+
+
